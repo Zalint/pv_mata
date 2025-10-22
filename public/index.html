@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des Activités - Point de Vente</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <!-- Page de connexion -->
+    <div id="loginPage" class="login-container">
+        <div class="login-card">
+            <h1>🔐 Connexion</h1>
+            <p class="subtitle">Application de gestion des activités PV</p>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Nom d'utilisateur</label>
+                    <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">Mot de passe</label>
+                    <input type="password" id="password" name="password" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Se connecter</button>
+                <div id="loginError" class="error-message" style="display: none;"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Page principale (cachée initialement) -->
+    <div id="mainPage" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <div class="container">
+                <h1>📊 Gestion des Activités - Point de Vente</h1>
+                <div class="user-info">
+                    <span id="userDisplay"></span>
+                    <button onclick="Auth.logout()" class="btn btn-secondary btn-sm">Déconnexion</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <!-- Formulaire de saisie -->
+            <section class="card">
+                <div class="card-header" style="cursor: pointer;" onclick="App.toggleSection('formSection')">
+                    <h2>📝 Nouvelle Activité</h2>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); App.toggleSection('formSection')">
+                        <span id="formSectionIcon">▼</span>
+                    </button>
+                </div>
+                <div class="card-body" id="formSection">
+                    <form id="activityForm">
+                        <input type="hidden" id="activityId" value="">
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="date">📅 Date *</label>
+                                <input type="date" id="date" name="date" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="point_vente">📍 Point de vente *</label>
+                                <select id="point_vente" name="point_vente" required>
+                                    <option value="">Sélectionner un point de vente</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="responsable">👤 Responsable *</label>
+                                <select id="responsable" name="responsable" required>
+                                    <option value="">Sélectionner un responsable</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="note_ventes">⭐ Note des ventes (1-10)</label>
+                                <input type="text" id="note_ventes" name="note_ventes" 
+                                       placeholder="Ex: 8,5 ou 8.5" pattern="^([1-9]|10)([,.][0-9]+)?$">
+                                <small>Utilisez une virgule ou un point pour les décimales (ex: 8,5 ou 8.5)</small>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="plaintes_client">⚠️ Plaintes client du jour</label>
+                            <textarea id="plaintes_client" name="plaintes_client" rows="2" 
+                                      placeholder="Décrivez les plaintes des clients..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="produits_manquants">📦 Produits manquants</label>
+                            <textarea id="produits_manquants" name="produits_manquants" rows="2" 
+                                      placeholder="Listez les produits manquants..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="commentaire_livreurs">🚚 Commentaire sur les livreurs</label>
+                            <textarea id="commentaire_livreurs" name="commentaire_livreurs" rows="2" 
+                                      placeholder="Commentaires sur les livraisons et livreurs..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="commentaire">💬 Commentaire général</label>
+                            <textarea id="commentaire" name="commentaire" rows="3" 
+                                      placeholder="Autres commentaires..."></textarea>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <span id="formSubmitText">✓ Enregistrer</span>
+                            </button>
+                            <button type="button" onclick="App.resetForm()" class="btn btn-secondary">
+                                ↻ Réinitialiser
+                            </button>
+                        </div>
+                        <div id="formError" class="error-message" style="display: none;"></div>
+                        <div id="formSuccess" class="success-message" style="display: none;"></div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Historique des activités -->
+            <section class="card">
+                <div class="card-header" style="cursor: pointer;" onclick="App.toggleSection('historySection')">
+                    <h2>📋 Historique des Activités</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="event.stopPropagation(); App.loadActivities()" class="btn btn-primary btn-sm">
+                            🔄 Actualiser
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); App.toggleSection('historySection')">
+                            <span id="historySectionIcon">▼</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body" id="historySection">
+                    <!-- Filtres -->
+                    <div class="filters">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="filterDateDebut">Date début</label>
+                                <input type="date" id="filterDateDebut">
+                            </div>
+                            <div class="form-group">
+                                <label for="filterDateFin">Date fin</label>
+                                <input type="date" id="filterDateFin">
+                            </div>
+                            <div class="form-group">
+                                <label for="filterPointVente">Point de vente</label>
+                                <select id="filterPointVente">
+                                    <option value="">Tous les points de vente</option>
+                                </select>
+                            </div>
+                            <div class="form-group filter-actions">
+                                <button onclick="App.applyFilters()" class="btn btn-primary">🔍 Appliquer</button>
+                                <button onclick="App.clearFilters()" class="btn btn-secondary">✕ Effacer</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tableau -->
+                    <div class="table-responsive">
+                        <table id="activitiesTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Point de Vente</th>
+                                    <th>Responsable</th>
+                                    <th>Note</th>
+                                    <th>Plaintes</th>
+                                    <th>Produits Manquants</th>
+                                    <th>Com. Livreurs</th>
+                                    <th>Commentaires</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activitiesTableBody">
+                                <tr>
+                                    <td colspan="9" style="text-align: center;">
+                                        Chargement des données...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="/js/auth.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
