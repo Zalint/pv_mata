@@ -166,7 +166,10 @@ Fournis une analyse au format JSON avec:
 4. "main_concerns": Tableau des principaux problèmes opérationnels identifiés (max 3)
 5. "positive_aspects": Tableau des aspects opérationnels positifs (max 3)
 
-IMPORTANT: Ne pas utiliser "Les clients expriment" ou "Les clients disent". Utilise plutôt "Le responsable signale", "Des problèmes opérationnels incluent", "La situation opérationnelle montre", etc.
+IMPORTANT: 
+- Ne pas utiliser "Les clients expriment" ou "Les clients disent". Utilise plutôt "Le responsable signale", "Des problèmes opérationnels incluent", "La situation opérationnelle montre", etc.
+- Quand tu mentionnes des produits manquants, TOUJOURS préciser les noms exacts des produits (ex: "merguez agneau" au lieu de "un produit manquant")
+- Quand tu mentionnes des plaintes, TOUJOURS être spécifique sur la nature exacte de la plainte
 
 Réponds UNIQUEMENT avec le JSON, sans texte avant ou après.`;
     }
