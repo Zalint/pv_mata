@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Activity = require('../models/activity');
+const Customer = require('../models/customer');
 const authenticateApiKey = require('../middleware/apiKeyAuth');
 const { analyzeDaySentiment, analyzePointVenteSentiment } = require('../services/sentimentAnalysis');
 
@@ -107,13 +108,15 @@ router.get('/point-vente/status', authenticateApiKey, async (req, res) => {
             });
         }
 
-        // Grouper les activités par date et collecter les commentaires par point de vente
+        // Grouper les activités par date et collecter les commentaires d'activité par point de vente
         const groupedData = {};
-        const pointVenteComments = {}; // Pour collecter tous les commentaires par point de vente (toutes dates confondues)
+        const pointVenteActivityComments = {}; // Commentaires d'activité (plaintes, livreurs, commentaires généraux)
+        const uniquePointsVente = new Set();
         
         activities.forEach(activity => {
             const dateKey = formatDate(activity.date);
             const pointVente = activity.point_vente;
+            uniquePointsVente.add(pointVente);
             
             if (!groupedData[dateKey]) {
                 groupedData[dateKey] = [];
@@ -129,30 +132,30 @@ router.get('/point-vente/status', authenticateApiKey, async (req, res) => {
                 commentaires: activity.commentaire || 'neant'
             });
             
-            // Collecter tous les commentaires pertinents pour l'analyse de sentiment
-            if (!pointVenteComments[pointVente]) {
-                pointVenteComments[pointVente] = [];
+            // Collecter les commentaires d'ACTIVITÉ pour l'analyse de sentiment
+            if (!pointVenteActivityComments[pointVente]) {
+                pointVenteActivityComments[pointVente] = [];
             }
             
-            // Ajouter tous les types de commentaires pour une analyse complète
+            // Ajouter uniquement les commentaires liés à l'activité (pas les commentaires clients)
             if (activity.plaintes_client && activity.plaintes_client.toLowerCase() !== 'neant' && activity.plaintes_client.trim() !== '') {
-                pointVenteComments[pointVente].push(`Plainte: ${activity.plaintes_client}`);
+                pointVenteActivityComments[pointVente].push(`Plainte: ${activity.plaintes_client}`);
             }
             if (activity.commentaire && activity.commentaire.toLowerCase() !== 'neant' && activity.commentaire.trim() !== '') {
-                pointVenteComments[pointVente].push(activity.commentaire);
+                pointVenteActivityComments[pointVente].push(`Commentaire: ${activity.commentaire}`);
             }
             if (activity.commentaire_livreurs && activity.commentaire_livreurs.toLowerCase() !== 'neant' && activity.commentaire_livreurs.trim() !== '') {
-                pointVenteComments[pointVente].push(`Livreur: ${activity.commentaire_livreurs}`);
+                pointVenteActivityComments[pointVente].push(`Livreur: ${activity.commentaire_livreurs}`);
             }
         });
 
-        // Analyser le sentiment pour chaque point de vente
+        // 1. Analyser le sentiment des ACTIVITÉS pour chaque point de vente
         const sentimentByPointVente = {};
-        for (const [pointVente, comments] of Object.entries(pointVenteComments)) {
+        for (const [pointVente, comments] of Object.entries(pointVenteActivityComments)) {
             try {
                 sentimentByPointVente[pointVente] = await analyzePointVenteSentiment(pointVente, comments);
             } catch (error) {
-                console.error(`Erreur analyse sentiment pour ${pointVente}:`, error);
+                console.error(`Erreur analyse sentiment activité pour ${pointVente}:`, error);
                 sentimentByPointVente[pointVente] = {
                     sentiment: 'unknown',
                     score: null,
@@ -162,12 +165,54 @@ router.get('/point-vente/status', authenticateApiKey, async (req, res) => {
             }
         }
 
-        // Ajouter l'analyse de sentiment à chaque activité
+        // 2. Analyser le sentiment des CLIENTS pour chaque point de vente
+        const clientSentimentByPointVente = {};
+        for (const pointVente of uniquePointsVente) {
+            try {
+                const clientData = await Customer.getLatestClientCommentsByPointVente(pointVente);
+                
+                if (!clientData) {
+                    clientSentimentByPointVente[pointVente] = {
+                        message: 'Pas de données',
+                        latest_date: null,
+                        analyzed: false
+                    };
+                } else {
+                    const analysis = await analyzePointVenteSentiment(
+                        `${pointVente} - Commentaires clients`,
+                        clientData.comments
+                    );
+                    
+                    clientSentimentByPointVente[pointVente] = {
+                        ...analysis,
+                        latest_date: clientData.latest_date
+                    };
+                }
+            } catch (error) {
+                console.error(`Erreur analyse sentiment clients pour ${pointVente}:`, error);
+                clientSentimentByPointVente[pointVente] = {
+                    sentiment: 'unknown',
+                    score: null,
+                    summary: 'Erreur lors de l\'analyse',
+                    latest_date: null,
+                    analyzed: false
+                };
+            }
+        }
+
+        // Ajouter les analyses de sentiment à chaque activité
         for (const [dateKey, dateActivities] of Object.entries(groupedData)) {
             dateActivities.forEach(activity => {
-                const sentiment = sentimentByPointVente[activity.point_de_vente];
-                if (sentiment) {
-                    activity.sentiment_analysis = sentiment;
+                // Sentiment de l'activité
+                const activitySentiment = sentimentByPointVente[activity.point_de_vente];
+                if (activitySentiment) {
+                    activity.sentiment_analysis = activitySentiment;
+                }
+                
+                // Sentiment des clients
+                const clientSentiment = clientSentimentByPointVente[activity.point_de_vente];
+                if (clientSentiment) {
+                    activity.client_sentiment_analysis = clientSentiment;
                 }
             });
         }

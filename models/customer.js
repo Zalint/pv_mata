@@ -268,6 +268,41 @@ class Customer {
         }
     }
 
+    // Récupérer les derniers commentaires clients par point de vente
+    static async getLatestClientCommentsByPointVente(pointVente) {
+        try {
+            const result = await pool.query(
+                `SELECT date, commentaire_client 
+                FROM customers 
+                WHERE point_vente = $1 
+                AND commentaire_client IS NOT NULL 
+                AND commentaire_client != '' 
+                AND LOWER(commentaire_client) != 'neant'
+                ORDER BY date DESC, created_at DESC 
+                LIMIT 10`,
+                [pointVente]
+            );
+            
+            if (result.rows.length === 0) {
+                return null;
+            }
+            
+            // Retourner la date la plus récente et tous les commentaires
+            const latestDate = result.rows[0].date instanceof Date 
+                ? result.rows[0].date.toISOString().split('T')[0] 
+                : result.rows[0].date;
+            
+            const comments = result.rows.map(row => row.commentaire_client);
+            
+            return {
+                latest_date: latestDate,
+                comments: comments
+            };
+        } catch (error) {
+            throw new Error('Erreur lors de la récupération des commentaires clients: ' + error.message);
+        }
+    }
+
     static async getStats(filters = {}) {
         const { activity_id, date, point_vente, dateDebut, dateFin, telephone, nom_client, type_client } = filters;
         let whereClause = 'WHERE 1=1';
