@@ -162,6 +162,12 @@
                     </div>
 
                     <!-- Tableau -->
+                    <div class="table-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div>
+                            <button onclick="App.exportActivitiesToExcel()" class="btn btn-secondary btn-sm">⬇️ Exporter Excel</button>
+                        </div>
+                        <div id="paginationControls" class="pagination-controls" style="display: flex; gap: 8px; align-items: center;"></div>
+                    </div>
                     <div class="table-responsive">
                         <table id="activitiesTable">
                             <thead>
@@ -191,6 +197,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/app.js"></script>
     <script src="/js/customers.js"></script>

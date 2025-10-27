@@ -1,5 +1,8 @@
 // Application principale
-const App = {
+const App = { 
+    activitiesCache: [],
+    pageSize: 50,
+    currentPage: 1,
     currentEditId: null,
 
     // Initialisation
@@ -132,14 +135,95 @@ const App = {
             const url = `/api/activities${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
             const activities = await this.apiRequest(url, 'GET');
 
-            if (activities.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">Aucune activité trouvée</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = activities.map(activity => this.createActivityRow(activity)).join('');
+            // Mettre en cache pour pagination et export
+            this.activitiesCache = activities;
+            this.currentPage = 1;
+            this.renderPaginatedActivities();
         } catch (error) {
             tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: red;">Erreur: ${error.message}</td></tr>`;
+        }
+    },
+
+    // Rendu paginé du tableau
+    renderPaginatedActivities() {
+        const tbody = document.getElementById('activitiesTableBody');
+        const total = this.activitiesCache.length;
+        if (total === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">Aucune activité trouvée</td></tr>';
+            this.renderPaginationControls(0, 0);
+            return;
+        }
+
+        const totalPages = Math.ceil(total / this.pageSize);
+        if (this.currentPage > totalPages) this.currentPage = totalPages;
+        const start = (this.currentPage - 1) * this.pageSize;
+        const end = Math.min(start + this.pageSize, total);
+        const pageItems = this.activitiesCache.slice(start, end);
+
+        tbody.innerHTML = pageItems.map(activity => this.createActivityRow(activity)).join('');
+        this.renderPaginationControls(this.currentPage, totalPages);
+    },
+
+    // Contrôles de pagination
+    renderPaginationControls(currentPage, totalPages) {
+        const el = document.getElementById('paginationControls');
+        if (totalPages <= 1) {
+            el.innerHTML = '';
+            return;
+        }
+        const disabledPrev = currentPage <= 1 ? 'disabled' : '';
+        const disabledNext = currentPage >= totalPages ? 'disabled' : '';
+        el.innerHTML = `
+            <button class="btn btn-secondary btn-sm" ${disabledPrev} onclick="App.gotoPage(${currentPage - 1})">◀️ Précédent</button>
+            <span>Page ${currentPage} / ${totalPages}</span>
+            <button class="btn btn-secondary btn-sm" ${disabledNext} onclick="App.gotoPage(${currentPage + 1})">Suivant ▶️</button>
+        `;
+    },
+
+    gotoPage(page) {
+        this.currentPage = Math.max(1, page);
+        this.renderPaginatedActivities();
+    },
+
+    // Export Excel
+    async exportActivitiesToExcel() {
+        try {
+            // Charger toutes les activités avec les filtres actifs (sans pagination)
+            const filters = {
+                dateDebut: document.getElementById('filterDateDebut').value,
+                dateFin: document.getElementById('filterDateFin').value,
+                pointVente: document.getElementById('filterPointVente').value
+            };
+
+            const queryParams = new URLSearchParams();
+            if (filters.dateDebut) queryParams.append('dateDebut', filters.dateDebut);
+            if (filters.dateFin) queryParams.append('dateFin', filters.dateFin);
+            if (filters.pointVente) queryParams.append('pointVente', filters.pointVente);
+
+            const url = `/api/activities${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+            const activities = await this.apiRequest(url, 'GET');
+
+            // Transformer les données pour Excel
+            const rows = activities.map(a => ({
+                Date: a.date.split('T')[0],
+                'Point de Vente': a.point_vente,
+                Responsable: a.responsable,
+                Note: a.note_ventes || '',
+                Plaintes: a.plaintes_client || '',
+                'Produits Manquants': a.produits_manquants || '',
+                'Com. Livreurs': a.commentaire_livreurs || '',
+                Commentaires: a.commentaire || ''
+            }));
+
+            // Générer le classeur Excel
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(rows);
+            XLSX.utils.book_append_sheet(wb, ws, 'Activites');
+
+            const dateStr = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(wb, `historique_activites_${dateStr}.xlsx`);
+        } catch (error) {
+            alert('Erreur export Excel: ' + error.message);
         }
     },
 
