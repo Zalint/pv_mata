@@ -10,19 +10,46 @@ const AllCustomers = {
         // Ne pas définir de dates par défaut - charger tous les clients
         this.loadCustomers();
         this.attachEventListeners();
+        this.loadPointsVenteForAddForm();
     },
 
     // Attacher les event listeners
     attachEventListeners() {
-        // Fermer le modal en cliquant sur l'overlay
-        const overlay = document.getElementById('editModalOverlay');
-        if (overlay) {
-            overlay.addEventListener('click', (e) => {
+        // Fermer le modal d'édition en cliquant sur l'overlay
+        const editOverlay = document.getElementById('editModalOverlay');
+        if (editOverlay) {
+            editOverlay.addEventListener('click', (e) => {
                 if (e.target.id === 'editModalOverlay') {
                     this.closeEditModal();
                 }
             });
         }
+
+        // Fermer le modal d'ajout en cliquant sur l'overlay
+        const addOverlay = document.getElementById('addModalOverlay');
+        if (addOverlay) {
+            addOverlay.addEventListener('click', (e) => {
+                if (e.target.id === 'addModalOverlay') {
+                    this.closeAddModal();
+                }
+            });
+        }
+
+        // Event listener pour la vérification du téléphone
+        const addTelephone = document.getElementById('add_telephone');
+        if (addTelephone) {
+            addTelephone.addEventListener('blur', (e) => {
+                this.checkPhoneExists(e.target.value);
+            });
+        }
+
+        // Event listeners pour les notes dans le formulaire d'ajout
+        ['add_note_qualite', 'add_note_prix', 'add_note_service'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('input', () => this.updateAddNoteGlobale());
+            }
+        });
     },
 
     // Définir les dates par défaut (mois en cours) - utilisé uniquement après effacement
@@ -400,6 +427,153 @@ const AllCustomers = {
         if (n >= 6) return 'note-bonne';
         if (n >= 4) return 'note-moyenne';
         return 'note-faible';
+    },
+
+    // Charger les points de vente pour le formulaire d'ajout
+    async loadPointsVenteForAddForm() {
+        try {
+            const response = await fetch('/data/points-vente.json');
+            const pointsVente = await response.json();
+            
+            const select = document.getElementById('add_point_vente');
+            if (select) {
+                select.innerHTML = '<option value="">Sélectionner...</option>' +
+                    pointsVente.map(pv => `<option value="${pv}">${pv}</option>`).join('');
+            }
+        } catch (error) {
+            console.error('Erreur:', error);
+        }
+    },
+
+    // Ouvrir le modal d'ajout
+    openAddModal() {
+        // Réinitialiser le formulaire
+        document.getElementById('addCustomerForm').reset();
+        
+        // Définir la date du jour
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        document.getElementById('add_date').value = `${year}-${month}-${day}`;
+        
+        // Réinitialiser les notes
+        document.getElementById('add_note_qualite').value = 5;
+        document.getElementById('add_note_prix').value = 5;
+        document.getElementById('add_note_service').value = 5;
+        this.updateAddNoteGlobale();
+        
+        // Type client par défaut
+        document.getElementById('add_type').value = 'Nouveau';
+        
+        // Masquer l'info de type client
+        document.getElementById('add_client_type_info').style.display = 'none';
+        
+        // Afficher le modal
+        document.getElementById('addModalOverlay').classList.add('active');
+    },
+
+    // Fermer le modal d'ajout
+    closeAddModal() {
+        document.getElementById('addModalOverlay').classList.remove('active');
+        document.getElementById('addCustomerForm').reset();
+        document.getElementById('add_client_type_info').style.display = 'none';
+    },
+
+    // Mettre à jour la note globale dans le formulaire d'ajout
+    updateAddNoteGlobale() {
+        const qualite = parseFloat(document.getElementById('add_note_qualite').value) || 0;
+        const prix = parseFloat(document.getElementById('add_note_prix').value) || 0;
+        const service = parseFloat(document.getElementById('add_note_service').value) || 0;
+        
+        const moyenne = (qualite + prix + service) / 3;
+        document.getElementById('add_note_globale_display').textContent = moyenne.toFixed(1) + '/10 ⭐';
+    },
+
+    // Vérifier si le téléphone existe
+    async checkPhoneExists(telephone) {
+        if (!telephone || telephone.length < 8) return;
+
+        try {
+            const response = await fetch(`/api/customers/check-phone?telephone=${encodeURIComponent(telephone)}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+
+            if (!response.ok) return;
+
+            const result = await response.json();
+            const infoEl = document.getElementById('add_client_type_info');
+            const detectedTypeEl = document.getElementById('add_detected_type');
+            const typeInput = document.getElementById('add_type');
+            const commentConnuSelect = document.getElementById('add_comment_connu');
+            
+            if (result.exists) {
+                detectedTypeEl.textContent = `Récurrent (🔁 ${result.count} commande${result.count > 1 ? 's' : ''})`;
+                infoEl.style.display = 'block';
+                infoEl.style.backgroundColor = '#d1ecf1';
+                infoEl.style.borderColor = '#17a2b8';
+                typeInput.value = 'Récurrent';
+                
+                // Pré-remplir "Comment connu?" avec la valeur précédente si elle existe
+                if (result.comment_connu) {
+                    commentConnuSelect.value = result.comment_connu;
+                }
+            } else {
+                detectedTypeEl.textContent = 'Nouveau (🆕)';
+                infoEl.style.display = 'block';
+                infoEl.style.backgroundColor = '#e7f3ff';
+                infoEl.style.borderColor = '#2196F3';
+                typeInput.value = 'Nouveau';
+            }
+        } catch (error) {
+            console.error('Erreur:', error);
+        }
+    },
+
+    // Gérer la soumission du formulaire d'ajout
+    async handleAddSubmit(event) {
+        event.preventDefault();
+
+        const formData = new FormData(event.target);
+        
+        const data = {
+            date: formData.get('date'),
+            telephone: formData.get('telephone'),
+            nom_client: formData.get('nom_client'),
+            point_vente: formData.get('point_vente'),
+            montant_commande: parseInt(formData.get('montant_commande')),
+            type_client: formData.get('type_client'),
+            comment_connu: formData.get('comment_connu') || null,
+            commentaire_client: formData.get('commentaire_client') || null,
+            note_qualite_produits: parseFloat(formData.get('note_qualite_produits')),
+            note_niveau_prix: parseFloat(formData.get('note_niveau_prix')),
+            note_service_commercial: parseFloat(formData.get('note_service_commercial'))
+        };
+
+        try {
+            const response = await fetch('/api/customers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Erreur lors de l\'ajout');
+            }
+
+            showNotification('Commande ajoutée avec succès', 'success');
+            this.closeAddModal();
+            this.loadCustomers();
+        } catch (error) {
+            console.error('Erreur:', error);
+            showNotification(error.message, 'error');
+        }
     }
 };
 
