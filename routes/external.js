@@ -25,55 +25,86 @@ const formatDate = (date) => {
 router.get('/point-vente/status', authenticateApiKey, async (req, res) => {
     try {
         const { start_date, end_date } = req.query;
+        let activities;
+        let usedStartDate, usedEndDate;
 
-        // Validation des paramètres requis
-        if (!start_date || !end_date) {
-            return res.status(400).json({
-                success: false,
-                error: 'Les paramètres start_date et end_date sont requis (format: YYYY-MM-DD)'
+        // Si pas de dates, récupérer la dernière date disponible
+        if (!start_date && !end_date) {
+            // Récupérer toutes les activités pour trouver la dernière date
+            const allActivities = await Activity.findAll({});
+            
+            if (allActivities.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Aucune activité trouvée dans la base de données'
+                });
+            }
+
+            // Trouver la date la plus récente
+            const latestDate = allActivities.reduce((latest, activity) => {
+                const activityDate = new Date(activity.date);
+                return activityDate > latest ? activityDate : latest;
+            }, new Date(allActivities[0].date));
+
+            usedStartDate = usedEndDate = formatDate(latestDate);
+            
+            // Filtrer les activités pour cette date
+            activities = allActivities.filter(activity => 
+                formatDate(activity.date) === usedStartDate
+            );
+        } else {
+            // Validation des paramètres requis
+            if (!start_date || !end_date) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Les paramètres start_date et end_date doivent être tous les deux présents ou absents (format: YYYY-MM-DD)'
+                });
+            }
+
+            // Validation du format des dates
+            if (!isValidDate(start_date)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'start_date doit être au format YYYY-MM-DD'
+                });
+            }
+
+            if (!isValidDate(end_date)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'end_date doit être au format YYYY-MM-DD'
+                });
+            }
+
+            // Validation de la cohérence des dates
+            const startDate = new Date(start_date);
+            const endDate = new Date(end_date);
+
+            if (startDate > endDate) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'start_date ne peut pas être postérieure à end_date'
+                });
+            }
+
+            // Validation de la plage maximale (optionnel - 90 jours)
+            const daysDiff = (endDate - startDate) / (1000 * 60 * 60 * 24);
+            if (daysDiff > 90) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'La plage de dates ne peut pas dépasser 90 jours'
+                });
+            }
+
+            usedStartDate = start_date;
+            usedEndDate = end_date;
+
+            // Récupération des activités
+            activities = await Activity.findAll({
+                dateDebut: start_date,
+                dateFin: end_date
             });
         }
-
-        // Validation du format des dates
-        if (!isValidDate(start_date)) {
-            return res.status(400).json({
-                success: false,
-                error: 'start_date doit être au format YYYY-MM-DD'
-            });
-        }
-
-        if (!isValidDate(end_date)) {
-            return res.status(400).json({
-                success: false,
-                error: 'end_date doit être au format YYYY-MM-DD'
-            });
-        }
-
-        // Validation de la cohérence des dates
-        const startDate = new Date(start_date);
-        const endDate = new Date(end_date);
-
-        if (startDate > endDate) {
-            return res.status(400).json({
-                success: false,
-                error: 'start_date ne peut pas être postérieure à end_date'
-            });
-        }
-
-        // Validation de la plage maximale (optionnel - 90 jours)
-        const daysDiff = (endDate - startDate) / (1000 * 60 * 60 * 24);
-        if (daysDiff > 90) {
-            return res.status(400).json({
-                success: false,
-                error: 'La plage de dates ne peut pas dépasser 90 jours'
-            });
-        }
-
-        // Récupération des activités
-        const activities = await Activity.findAll({
-            dateDebut: start_date,
-            dateFin: end_date
-        });
 
         // Grouper les activités par date
         const groupedData = {};
@@ -110,8 +141,8 @@ router.get('/point-vente/status', authenticateApiKey, async (req, res) => {
             data: sortedData,
             count: activities.length,
             period: {
-                start: start_date,
-                end: end_date
+                start: usedStartDate,
+                end: usedEndDate
             }
         };
 
