@@ -133,7 +133,12 @@ async function analyzePointVenteSentiment(pointVente, comments) {
 
     const commentsText = validComments.map((c, i) => `${i + 1}. ${c}`).join('\n');
 
-    const prompt = `Tu es un analyste expert en satisfaction client. Analyse les commentaires clients suivants pour le point de vente "${pointVente}":
+    // Déterminer si ce sont des commentaires clients ou des observations de responsables
+    const isClientComments = pointVente.includes('Commentaires clients');
+    
+    let prompt;
+    if (isClientComments) {
+        prompt = `Tu es un analyste expert en satisfaction client. Analyse les commentaires clients suivants pour le point de vente "${pointVente.replace(' - Commentaires clients', '')}":
 
 COMMENTAIRES CLIENTS:
 ${commentsText}
@@ -141,11 +146,30 @@ ${commentsText}
 Fournis une analyse au format JSON avec:
 1. "sentiment": Évaluation globale ("positif", "neutre", "négatif", "mixte")
 2. "score": Score de satisfaction sur 10 (basé sur le ton et le contenu des commentaires)
-3. "summary": Résumé concis en 1-2 phrases de la perception client
-4. "main_concerns": Tableau des principales préoccupations mentionnées (max 3)
-5. "positive_aspects": Tableau des aspects positifs mentionnés (max 3)
+3. "summary": Résumé concis en 1-2 phrases de la perception des clients
+4. "main_concerns": Tableau des principales préoccupations mentionnées par les clients (max 3)
+5. "positive_aspects": Tableau des aspects positifs mentionnés par les clients (max 3)
 
 Réponds UNIQUEMENT avec le JSON, sans texte avant ou après.`;
+    } else {
+        prompt = `Tu es un analyste expert en gestion opérationnelle. Analyse les observations et commentaires suivants du responsable du point de vente "${pointVente}":
+
+OBSERVATIONS DU RESPONSABLE:
+${commentsText}
+
+Ces commentaires proviennent du ressenti du responsable/commercial sur l'activité du jour (plaintes observées, produits manquants, commentaires sur les livreurs, etc.).
+
+Fournis une analyse au format JSON avec:
+1. "sentiment": Évaluation globale de la situation opérationnelle ("positif", "neutre", "négatif", "mixte")
+2. "score": Score sur 10 reflétant la qualité de l'opération du jour
+3. "summary": Résumé concis en 1-2 phrases de la situation opérationnelle du point de vente
+4. "main_concerns": Tableau des principaux problèmes opérationnels identifiés (max 3)
+5. "positive_aspects": Tableau des aspects opérationnels positifs (max 3)
+
+IMPORTANT: Ne pas utiliser "Les clients expriment" ou "Les clients disent". Utilise plutôt "Le responsable signale", "Des problèmes opérationnels incluent", "La situation opérationnelle montre", etc.
+
+Réponds UNIQUEMENT avec le JSON, sans texte avant ou après.`;
+    }
 
     try {
         const response = await openai.chat.completions.create({
