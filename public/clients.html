@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base Clients - Gestion PV</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/customers.css">
+</head>
+<body>
+    <!-- Page de connexion -->
+    <div id="loginPage" class="login-container">
+        <div class="login-card">
+            <h1>🔐 Connexion</h1>
+            <p class="subtitle">Application de gestion des activités PV</p>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Nom d'utilisateur</label>
+                    <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">Mot de passe</label>
+                    <input type="password" id="password" name="password" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Se connecter</button>
+                <div id="loginError" class="error-message" style="display: none;"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Page principale (cachée initialement) -->
+    <div id="mainPage" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <div class="container">
+                <h1>👥 Base Clients</h1>
+                <div class="user-info">
+                    <a href="/" class="btn btn-secondary btn-sm" style="margin-right: 10px;">← Activités</a>
+                    <span id="userDisplay"></span>
+                    <button onclick="Auth.logout()" class="btn btn-secondary btn-sm">Déconnexion</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <!-- Filtres et statistiques -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>🔍 Recherche et Filtres</h2>
+                </div>
+                <div class="card-body">
+                    <div class="filters">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="searchTelephone">Téléphone</label>
+                                <input type="text" id="searchTelephone" placeholder="Rechercher par téléphone">
+                            </div>
+                            <div class="form-group">
+                                <label for="searchNom">Nom client</label>
+                                <input type="text" id="searchNom" placeholder="Rechercher par nom">
+                            </div>
+                            <div class="form-group">
+                                <label for="filterPointVente">Point de vente</label>
+                                <select id="filterPointVente">
+                                    <option value="">Tous les points de vente</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="filterTypeClient">Type</label>
+                                <select id="filterTypeClient">
+                                    <option value="">Tous</option>
+                                    <option value="Nouveau">Nouveau</option>
+                                    <option value="Récurrent">Récurrent</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="filterDateDebut">Date début</label>
+                                <input type="date" id="filterDateDebut">
+                            </div>
+                            <div class="form-group">
+                                <label for="filterDateFin">Date fin</label>
+                                <input type="date" id="filterDateFin">
+                            </div>
+                            <div class="form-group filter-actions">
+                                <button onclick="AllCustomers.applyFilters()" class="btn btn-primary">🔍 Rechercher</button>
+                                <button onclick="AllCustomers.clearFilters()" class="btn btn-secondary">✕ Effacer</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Statistiques globales -->
+                    <div class="stats-grid" id="globalStats" style="margin-top: 20px;">
+                        <div class="stat-item">
+                            <div class="stat-label">Total clients</div>
+                            <div class="stat-value">-</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Nouveaux</div>
+                            <div class="stat-value">-</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Récurrents</div>
+                            <div class="stat-value">-</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Note moyenne</div>
+                            <div class="stat-value">-</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tableau des clients -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>📋 Liste des Clients</h2>
+                    <button onclick="AllCustomers.loadCustomers()" class="btn btn-primary btn-sm">🔄 Actualiser</button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="customers-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Téléphone</th>
+                                    <th>Nom Client</th>
+                                    <th>Point de vente</th>
+                                    <th>Montant</th>
+                                    <th>Type</th>
+                                    <th>Comment connu?</th>
+                                    <th>Note globale</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="customersTableBody">
+                                <tr>
+                                    <td colspan="9" style="text-align: center; padding: 40px;">
+                                        Chargement...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div id="pagination" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
+                        <!-- Les boutons de pagination seront générés ici -->
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Modal d'édition -->
+    <div class="form-modal-overlay" id="editModalOverlay">
+        <div class="form-modal">
+            <div class="form-modal-header">
+                <h3>Modifier la commande</h3>
+                <button class="btn-close-modal" onclick="AllCustomers.closeEditModal()">✕</button>
+            </div>
+            <div class="form-modal-body">
+                <form id="editCustomerForm" onsubmit="AllCustomers.handleEditSubmit(event)">
+                    <input type="hidden" id="edit_customer_id">
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit_date">Date *</label>
+                            <input type="date" id="edit_date" name="date" required readonly style="background-color: #e9ecef; cursor: not-allowed;">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_telephone">Téléphone *</label>
+                            <input type="tel" id="edit_telephone" name="telephone" required readonly style="background-color: #e9ecef; cursor: not-allowed;">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit_nom">Nom du client *</label>
+                            <input type="text" id="edit_nom" name="nom_client" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_point_vente">Point de vente *</label>
+                            <input type="text" id="edit_point_vente" name="point_vente" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit_montant">Montant (FCFA) *</label>
+                            <input type="number" id="edit_montant" name="montant_commande" min="0" step="100" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_type">Type client *</label>
+                            <input type="text" id="edit_type" name="type_client" required readonly style="background-color: #e9ecef; cursor: not-allowed;">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_comment_connu">Comment connu?</label>
+                        <select id="edit_comment_connu" name="comment_connu">
+                            <option value="">Sélectionner...</option>
+                            <option value="Réseaux sociaux">Réseaux sociaux</option>
+                            <option value="Bouche à oreille">Bouche à oreille</option>
+                            <option value="Publicité">Publicité</option>
+                            <option value="Client existant">Client existant</option>
+                            <option value="Site web">Site web</option>
+                            <option value="Autre">Autre</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_commentaire">Commentaire</label>
+                        <textarea id="edit_commentaire" name="commentaire_client" rows="3"></textarea>
+                    </div>
+
+                    <hr style="margin: 20px 0; border: none; border-top: 2px solid #e9ecef;">
+                    <h4 style="margin-bottom: 15px;">Évaluation (sur 10)</h4>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit_note_qualite">Qualité des produits</label>
+                            <input type="number" id="edit_note_qualite" name="note_qualite_produits" min="0" max="10" step="0.1" value="5">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_note_prix">Niveau de prix</label>
+                            <input type="number" id="edit_note_prix" name="note_niveau_prix" min="0" max="10" step="0.1" value="5">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit_note_service">Service commercial</label>
+                            <input type="number" id="edit_note_service" name="note_service_commercial" min="0" max="10" step="0.1" value="5">
+                        </div>
+                        <div class="form-group">
+                            <label>Note globale</label>
+                            <div id="edit_note_globale_display" style="font-size: 20px; font-weight: bold; color: #0d6efd; padding: 10px 0;">5.0/10 ⭐</div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-cancel" onclick="AllCustomers.closeEditModal()">Annuler</button>
+                        <button type="submit" class="btn-save">Enregistrer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/auth.js"></script>
+    <script src="/js/allCustomers.js"></script>
+</body>
+</html>

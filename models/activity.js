@@ -24,7 +24,11 @@ class Activity {
                 [date, point_vente, responsable, note_ventes, plaintes_client, 
                  produits_manquants, commentaire_livreurs, commentaire, created_by]
             );
-            return result.rows[0];
+            const activity = result.rows[0];
+            if (activity && activity.date instanceof Date) {
+                activity.date = activity.date.toISOString().split('T')[0];
+            }
+            return activity;
         } catch (error) {
             throw new Error('Erreur lors de la création de l\'activité: ' + error.message);
         }
@@ -58,7 +62,13 @@ class Activity {
 
         try {
             const result = await pool.query(query, params);
-            return result.rows;
+            // Convertir les dates en format YYYY-MM-DD pour éviter les problèmes de timezone
+            return result.rows.map(row => ({
+                ...row,
+                date: row.date instanceof Date 
+                    ? row.date.toISOString().split('T')[0] 
+                    : row.date
+            }));
         } catch (error) {
             throw new Error('Erreur lors de la récupération des activités: ' + error.message);
         }
@@ -70,7 +80,11 @@ class Activity {
                 'SELECT * FROM activities WHERE id = $1',
                 [id]
             );
-            return result.rows[0];
+            const activity = result.rows[0];
+            if (activity && activity.date instanceof Date) {
+                activity.date = activity.date.toISOString().split('T')[0];
+            }
+            return activity;
         } catch (error) {
             throw new Error('Erreur lors de la récupération de l\'activité: ' + error.message);
         }
@@ -99,7 +113,11 @@ class Activity {
                 [date, point_vente, responsable, note_ventes, plaintes_client, 
                  produits_manquants, commentaire_livreurs, commentaire, id]
             );
-            return result.rows[0];
+            const activity = result.rows[0];
+            if (activity && activity.date instanceof Date) {
+                activity.date = activity.date.toISOString().split('T')[0];
+            }
+            return activity;
         } catch (error) {
             throw new Error('Erreur lors de la mise à jour de l\'activité: ' + error.message);
         }

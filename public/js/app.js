@@ -146,11 +146,13 @@ const App = {
     // Créer une ligne de tableau pour une activité
     createActivityRow(activity) {
         const user = Auth.getUser();
-        const canEdit = user.role === 'ADMIN' || 
-                       (user.role === 'MANAGER' && activity.created_by === user.id);
+        const canEdit = user.role === 'ADMIN' || user.role === 'MANAGER';
         const canDelete = user.role === 'ADMIN';
 
         const date = new Date(activity.date).toLocaleDateString('fr-FR');
+        
+        // Extraire la date au format YYYY-MM-DD sans conversion timezone
+        const dateOnly = activity.date.split('T')[0];
         
         return `
             <tr>
@@ -163,10 +165,10 @@ const App = {
                 <td>${this.truncate(activity.commentaire_livreurs, 50)}</td>
                 <td>${this.truncate(activity.commentaire, 50)}</td>
                 <td>
-                    <div class="action-buttons">
+                    <div class="action-buttons" style="display: flex; flex-direction: column; gap: 5px;">
+                        <button class="btn btn-info" onclick="CustomersModule.openCustomersModal(${activity.id}, '${dateOnly}', '${this.escapeHtml(activity.point_vente).replace(/'/g, "\\'")}')">👥 Clients</button>
                         ${canEdit ? `<button class="btn btn-warning" onclick="App.editActivity(${activity.id})">✏️ Modifier</button>` : ''}
                         ${canDelete ? `<button class="btn btn-danger" onclick="App.deleteActivity(${activity.id})">🗑️ Supprimer</button>` : ''}
-                        ${!canEdit && !canDelete ? '-' : ''}
                     </div>
                 </td>
             </tr>
@@ -323,3 +325,37 @@ const App = {
         }
     }
 };
+
+// Fonction globale pour afficher des notifications
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        z-index: 10000;
+        animation: slideIn 0.3s ease-out;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    
+    const colors = {
+        success: '#198754',
+        error: '#dc3545',
+        info: '#0d6efd',
+        warning: '#ffc107'
+    };
+    
+    notification.style.background = colors[type] || colors.info;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}

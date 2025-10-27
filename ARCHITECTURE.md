@@ -64,8 +64,113 @@ pv-app/
 ```
 Client → Express → Middleware Auth → Middleware Role → Route Handler → Modèle → PostgreSQL
                                                                                       ↓
-Client ← JSON ←────────────────────────────────────────────────────────────────────┘
+Client ← JSON ←────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Architecture MVC
+
+Notre application suit le pattern **MVC (Model-View-Controller)** :
+
+```
+┌─────────────────────────────────────────────────┐
+│                    MVC Pattern                   │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│  MODEL          ←→   CONTROLLER   ←→   VIEW     │
+│                                                  │
+│  models/             routes/           public/   │
+│  ├─ user.js          ├─ auth.js       ├─ index.html│
+│  └─ activity.js      └─ activities.js └─ app.js │
+│                                                  │
+│  (Données)           (Logique)         (Interface)│
+└─────────────────────────────────────────────────┘
+```
+
+#### 1. MODEL (`models/`) - Gestion des données
+
+```javascript
+// models/activity.js
+class Activity {
+    static async findAll(filters) {
+        // Interaction avec la base de données
+        const result = await pool.query('SELECT * FROM activities...');
+        return result.rows;
+    }
+}
+```
+
+**Responsabilité** :
+- ✅ Requêtes SQL
+- ✅ Validation des données
+- ✅ Logique métier liée aux données
+
+#### 2. CONTROLLER (`routes/`) - Logique de contrôle
+
+```javascript
+// routes/activities.js
+router.get('/', authenticateToken, async (req, res) => {
+    try {
+        const { dateDebut, dateFin, pointVente } = req.query;  // 1. Récupérer params
+        
+        const filters = {};                                     // 2. Préparer données
+        if (dateDebut) filters.dateDebut = dateDebut;
+        
+        const activities = await Activity.findAll(filters);     // 3. Appeler Model
+        
+        res.json(activities);                                   // 4. Retourner réponse
+    } catch (error) {
+        res.status(500).json({ error: 'Erreur serveur' });    // 5. Gérer erreurs
+    }
+});
+```
+
+**Responsabilité** :
+- ✅ Recevoir les requêtes HTTP
+- ✅ Valider les paramètres
+- ✅ Appeler les Modèles
+- ✅ Gérer les erreurs
+- ✅ Retourner les réponses (JSON)
+- ✅ Appliquer les middlewares (auth, validation)
+
+#### 3. VIEW (`public/`) - Interface utilisateur
+
+```javascript
+// public/js/app.js
+async loadActivities() {
+    const response = await fetch('/api/activities');  // Appelle le Controller
+    const activities = await response.json();
+    // Afficher dans le DOM
+}
+```
+
+**Responsabilité** :
+- ✅ Affichage (HTML/CSS)
+- ✅ Interaction utilisateur
+- ✅ Appels API vers les Controllers
+
+#### Flux complet d'une requête MVC
+
+```
+1. VIEW (public/js/app.js)
+   → fetch('/api/activities?pointVente=O.Foire')
+   
+2. CONTROLLER (routes/activities.js)
+   → Récupère les paramètres : req.query.pointVente
+   → Appelle le Model : Activity.findAll({ pointVente: 'O.Foire' })
+   
+3. MODEL (models/activity.js)
+   → Exécute la requête SQL
+   → Retourne les données au Controller
+   
+4. CONTROLLER (routes/activities.js)
+   → Formate la réponse : res.json(activities)
+   
+5. VIEW (public/js/app.js)
+   → Reçoit les données
+   → Affiche dans le tableau
+```
+
+**Résumé** : Les `routes/` jouent le rôle de **Controllers** dans notre architecture MVC.
 
 ---
 

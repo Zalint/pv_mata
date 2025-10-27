@@ -1,0 +1,118 @@
+##########A. Who is sending Authorization header ?#############
+
+The client (browser) sends the Authorization header.
+
+Flow:
+
+1. Login (public\js\auth.js lines 22-45):
+◦  User submits username/password
+◦  Client sends POST to /api/auth/login
+
+		Server flow for POST /api/auth/login:
+
+		1. Extract credentials (lines 10-15):
+		•  Gets username and password from request body
+		•  Returns 400 if either is missing
+
+		2. Find user (lines 17-21):
+		•  Queries database: SELECT * FROM users WHERE username = $1
+		•  Returns 401 if user doesn't exist
+
+		3. Verify password (lines 23-27):
+		•  Uses bcrypt.compare() to check plain password against stored hash
+		•  Returns 401 if password is wrong
+
+		4. Generate JWT (lines 29-38):
+		•  Creates token with payload: {id, username, role}
+		•  Sets expiration from JWT_EXPIRES_IN env variable
+		
+			Specifically, in routes\auth.js lines 30-38:
+			routes\auth.js (30-38)
+				const token = jwt.sign(
+				{ 
+					id: user.id, 
+					username: user.username, 
+					role: user.role 
+				},
+				process.env.JWT_SECRET,
+				{ expiresIn: process.env.JWT_EXPIRES_IN }
+				 );
+			Who/what is involved:
+
+			1. jsonwebtoken library (jwt.sign() method) - does the actual cryptographic signing
+			2. Server-side code (routes\auth.js) - calls the library after successful authentication
+			3. JWT_SECRET environment variable - the secret key used to sign the token (only the server knows this)
+
+			The token is created on the server, sent to the client once, and then the client includes it in subsequent requests for authentication.
+
+		5. Return response (lines 41-48):
+		•  Sends back:
+		◦  token: JWT for subsequent requests
+		◦  user: {id, username, role} for client display
+
+		If any error occurs, returns 500 with generic error message.
+
+
+◦  Server returns JWT token
+◦  Token stored in localStorage
+2. Subsequent requests (public\js\app.js lines 271-296):
+◦  Client's apiRequest() method retrieves token via Auth.getToken() (from localStorage)
+◦  Adds header: 'Authorization': 'Bearer ${token}'
+◦  Every API call (GET/POST/PUT/DELETE activities) automatically includes this header
+3. Server validation:
+◦  middleware\auth.js extracts and validates the token
+◦  If valid, attaches user info to req.user
+
+Summary: The browser JavaScript automatically attaches the stored JWT token to every API request after login.
+
+
+
+middleware\auth.js
+
+Role: Validates JWT authentication tokens on incoming requests.
+
+How it operates:
+1. Extracts token: Reads the Authorization header expecting format Bearer <token>
+2. Validates presence: Returns 401 if no token is found
+3. Verifies token: Uses jwt.verify() with JWT_SECRET to validate the token
+4. Handles errors: Returns 403 if token is invalid or expired
+5. Attaches user data: On success, adds decoded user info to req.user and calls next() to proceed
+
+
+#####B. Step-by-step role check when DIDI (MANAGER) connects:########
+
+Initial Login:
+
+1. DIDI enters credentials (username: DIDI, password: didi2024)
+
+2. Server validates (routes\auth.js):
+•  Finds user in database: username='DIDI', role='MANAGER'
+•  Verifies password against bcrypt hash
+•  Creates JWT token with payload: {id: X, username: 'DIDI', role: 'MANAGER'}
+•  Returns token to client
+
+3. Client stores token in localStorage
+
+
+
+Subsequent Requests:
+
+Let's trace a request to DELETE an activity (most restrictive):
+
+4. Client sends request:
+DELETE /api/activities/123
+Headers: { Authorization: 'Bearer <token>' }
+5. Request hits route (routes\activities.js line 199):
+router.delete('/:id', authenticateToken, checkRole('ADMIN'), ...)
+6. authenticateToken middleware runs first (middleware\auth.js):
+•  Extracts token from header
+•  Verifies signature with JWT_SECRET
+•  Decodes payload: {id: X, username: 'DIDI', role: 'MANAGER'}
+•  Attaches to request: req.user = {id: X, username: 'DIDI', role: 'MANAGER'}
+•  Calls next()
+
+7. checkRole('ADMIN') middleware runs (middleware\roleCheck.js):
+•  Checks req.user.role exists ✅ ('MANAGER')
+•  Checks if 'MANAGER' is in ['ADMIN'] ❌
+•  Returns 403: "Accès refusé. Vous n'avez pas les permissions nécessaires."
+

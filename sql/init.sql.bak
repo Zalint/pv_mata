@@ -1,3 +1,16 @@
+-- Script d'initialisation de la base de données pv_data
+-- À exécuter manuellement dans PostgreSQL ou via le script init-db.js
+
+-- Créer la base de données (si elle n'existe pas)
+-- CREATE DATABASE pv_data;
+
+-- Se connecter à la base de données
+-- \c pv_data
+
+-- Supprimer les tables si elles existent (pour réinitialisation)
+DROP TABLE IF EXISTS activities CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
 -- Table: users
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,

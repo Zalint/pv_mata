@@ -6,6 +6,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const activitiesRoutes = require('./routes/activities');
 const externalRoutes = require('./routes/external');
+const customersRoutes = require('./routes/customers');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/auth', authRoutes);
 app.use('/api/activities', activitiesRoutes);
 app.use('/api/external', externalRoutes);
+app.use('/api/customers', customersRoutes);
 
 // Route principale - Servir index.html
 app.get('/', (req, res) => {

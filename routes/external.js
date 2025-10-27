@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Activity = require('../models/activity');
 const authenticateApiKey = require('../middleware/apiKeyAuth');
+const { analyzeDaySentiment, analyzePointVenteSentiment } = require('../services/sentimentAnalysis');
 
 // Fonction pour valider le format de date (YYYY-MM-DD)
 const isValidDate = (dateString) => {
@@ -106,18 +107,20 @@ router.get('/point-vente/status', authenticateApiKey, async (req, res) => {
             });
         }
 
-        // Grouper les activités par date
+        // Grouper les activités par date et collecter les commentaires par point de vente
         const groupedData = {};
+        const pointVenteComments = {}; // Pour collecter tous les commentaires par point de vente (toutes dates confondues)
         
         activities.forEach(activity => {
             const dateKey = formatDate(activity.date);
+            const pointVente = activity.point_vente;
             
             if (!groupedData[dateKey]) {
                 groupedData[dateKey] = [];
             }
             
             groupedData[dateKey].push({
-                point_de_vente: activity.point_vente,
+                point_de_vente: pointVente,
                 responsable: activity.responsable,
                 note: activity.note_ventes,
                 plaintes: activity.plaintes_client || 'neant',
@@ -125,7 +128,49 @@ router.get('/point-vente/status', authenticateApiKey, async (req, res) => {
                 commentaire_livreurs: activity.commentaire_livreurs || 'neant',
                 commentaires: activity.commentaire || 'neant'
             });
+            
+            // Collecter tous les commentaires pertinents pour l'analyse de sentiment
+            if (!pointVenteComments[pointVente]) {
+                pointVenteComments[pointVente] = [];
+            }
+            
+            // Ajouter tous les types de commentaires pour une analyse complète
+            if (activity.plaintes_client && activity.plaintes_client.toLowerCase() !== 'neant' && activity.plaintes_client.trim() !== '') {
+                pointVenteComments[pointVente].push(`Plainte: ${activity.plaintes_client}`);
+            }
+            if (activity.commentaire && activity.commentaire.toLowerCase() !== 'neant' && activity.commentaire.trim() !== '') {
+                pointVenteComments[pointVente].push(activity.commentaire);
+            }
+            if (activity.commentaire_livreurs && activity.commentaire_livreurs.toLowerCase() !== 'neant' && activity.commentaire_livreurs.trim() !== '') {
+                pointVenteComments[pointVente].push(`Livreur: ${activity.commentaire_livreurs}`);
+            }
         });
+
+        // Analyser le sentiment pour chaque point de vente
+        const sentimentByPointVente = {};
+        for (const [pointVente, comments] of Object.entries(pointVenteComments)) {
+            try {
+                sentimentByPointVente[pointVente] = await analyzePointVenteSentiment(pointVente, comments);
+            } catch (error) {
+                console.error(`Erreur analyse sentiment pour ${pointVente}:`, error);
+                sentimentByPointVente[pointVente] = {
+                    sentiment: 'unknown',
+                    score: null,
+                    summary: 'Erreur lors de l\'analyse',
+                    analyzed: false
+                };
+            }
+        }
+
+        // Ajouter l'analyse de sentiment à chaque activité
+        for (const [dateKey, dateActivities] of Object.entries(groupedData)) {
+            dateActivities.forEach(activity => {
+                const sentiment = sentimentByPointVente[activity.point_de_vente];
+                if (sentiment) {
+                    activity.sentiment_analysis = sentiment;
+                }
+            });
+        }
 
         // Trier les dates
         const sortedData = {};
@@ -153,6 +198,82 @@ router.get('/point-vente/status', authenticateApiKey, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Erreur serveur lors de la récupération des données'
+        });
+    }
+});
+
+// GET /api/external/point-vente/sentiment - Analyse de sentiment pour une date
+router.get('/point-vente/sentiment', authenticateApiKey, async (req, res) => {
+    try {
+        const { date } = req.query;
+        let targetDate;
+
+        // Si pas de date, utiliser la dernière date disponible
+        if (!date) {
+            const allActivities = await Activity.findAll({});
+            
+            if (allActivities.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Aucune activité trouvée dans la base de données'
+                });
+            }
+
+            const latestDate = allActivities.reduce((latest, activity) => {
+                const activityDate = new Date(activity.date);
+                return activityDate > latest ? activityDate : latest;
+            }, new Date(allActivities[0].date));
+
+            targetDate = formatDate(latestDate);
+        } else {
+            // Validation du format de la date
+            if (!isValidDate(date)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'date doit être au format YYYY-MM-DD'
+                });
+            }
+            targetDate = date;
+        }
+
+        // Récupérer les activités pour cette date
+        const activities = await Activity.findAll({
+            dateDebut: targetDate,
+            dateFin: targetDate
+        });
+
+        if (activities.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: `Aucune activité trouvée pour la date ${targetDate}`
+            });
+        }
+
+        // Formatter les activités pour l'analyse
+        const formattedActivities = activities.map(activity => ({
+            point_de_vente: activity.point_vente,
+            responsable: activity.responsable,
+            note: activity.note_ventes,
+            plaintes: activity.plaintes_client || 'neant',
+            produits_manquants: activity.produits_manquants || 'neant',
+            commentaire_livreurs: activity.commentaire_livreurs || 'neant',
+            commentaires: activity.commentaire || 'neant'
+        }));
+
+        // Effectuer l'analyse de sentiment
+        const analysis = await analyzeDaySentiment(formattedActivities, targetDate);
+
+        res.json({
+            success: true,
+            analysis
+        });
+
+    } catch (error) {
+        console.error('Erreur lors de l\'analyse de sentiment:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erreur serveur lors de l\'analyse de sentiment',
+            details: error.message
         });
     }
 });

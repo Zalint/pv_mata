@@ -48,7 +48,16 @@ curl -X GET "http://localhost:3000/api/external/point-vente/status?start_date=20
         "plaintes": "agneau est venu en retard",
         "produits_manquants": "neant",
         "commentaire_livreurs": "neant",
-        "commentaires": "neant"
+        "commentaires": "neant",
+        "sentiment_analysis": {
+          "sentiment": "négatif",
+          "score": 4,
+          "summary": "Problème de retard de livraison de l'agneau signalé",
+          "main_concerns": ["Retard de livraison"],
+          "positive_aspects": [],
+          "total_comments": 1,
+          "analyzed": true
+        }
       },
       {
         "point_de_vente": "Mbao",
@@ -57,7 +66,16 @@ curl -X GET "http://localhost:3000/api/external/point-vente/status?start_date=20
         "plaintes": "viande de mouton est fini trop top",
         "produits_manquants": "merguez agneau",
         "commentaire_livreurs": "neant",
-        "commentaires": "rien à signaler"
+        "commentaires": "rien à signaler",
+        "sentiment_analysis": {
+          "sentiment": "mixte",
+          "score": 6,
+          "summary": "Rupture de stock de viande de mouton signalée, mais pas d'autres problèmes majeurs",
+          "main_concerns": ["Rupture de stock viande", "Produits manquants"],
+          "positive_aspects": ["Pas d'autres incidents"],
+          "total_comments": 2,
+          "analyzed": true
+        }
       }
     ],
     "2025-10-24": [
@@ -68,7 +86,16 @@ curl -X GET "http://localhost:3000/api/external/point-vente/status?start_date=20
         "plaintes": "Ras",
         "produits_manquants": "Oeuf",
         "commentaire_livreurs": "Neant",
-        "commentaires": "Aucun commentaire"
+        "commentaires": "Aucun commentaire",
+        "sentiment_analysis": {
+          "sentiment": "mixte",
+          "score": 6,
+          "summary": "Rupture de stock de viande de mouton signalée, mais pas d'autres problèmes majeurs",
+          "main_concerns": ["Rupture de stock viande", "Produits manquants"],
+          "positive_aspects": ["Pas d'autres incidents"],
+          "total_comments": 2,
+          "analyzed": true
+        }
       }
     ]
   },
@@ -102,6 +129,21 @@ curl -X GET "http://localhost:3000/api/external/point-vente/status?start_date=20
 | produits_manquants | string | Produits manquants |
 | commentaire_livreurs | string | Commentaires des livreurs |
 | commentaires | string | Commentaires généraux |
+| sentiment_analysis | object | Analyse de sentiment pour ce point de vente (voir structure ci-dessous) |
+
+### Structure de l'analyse de sentiment
+
+L'objet `sentiment_analysis` contient une clé pour chaque point de vente avec l'analyse suivante :
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| sentiment | string | Évaluation globale : "positif", "neutre", "négatif", "mixte", "unknown" |
+| score | number\|null | Score de satisfaction sur 10 basé sur les commentaires |
+| summary | string | Résumé concis de la perception client (1-2 phrases) |
+| main_concerns | array | Principales préoccupations identifiées dans les commentaires |
+| positive_aspects | array | Aspects positifs mentionnés dans les commentaires |
+| total_comments | number | Nombre de commentaires analysés |
+| analyzed | boolean | Indique si l'analyse a été effectuée avec succès |
 
 ### Codes d'erreur
 
@@ -236,3 +278,8 @@ curl -X GET "http://localhost:3000/api/external/point-vente/status?start_date=20
 - Les dates sont triées du plus récent au plus ancien
 - Les valeurs vides sont remplacées par "neant"
 - La note peut être `null` si non renseignée
+- **Analyse de sentiment** : L'endpoint inclut désormais une analyse automatique par OpenAI des commentaires clients pour chaque point de vente
+  - L'analyse regroupe tous les commentaires de la période demandée pour chaque point de vente
+  - Les plaintes, commentaires généraux et commentaires livreurs sont analysés ensemble
+  - Si aucun commentaire significatif n'est trouvé, le sentiment est "neutral" avec `analyzed: false`
+  - En cas d'erreur API OpenAI, le sentiment est "unknown" avec les détails de l'erreur
