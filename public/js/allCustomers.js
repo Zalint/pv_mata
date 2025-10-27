@@ -574,6 +574,81 @@ const AllCustomers = {
             console.error('Erreur:', error);
             showNotification(error.message, 'error');
         }
+    },
+
+    // Exporter vers Excel
+    async exportToExcel() {
+        try {
+            // Récupérer tous les clients avec les filtres actifs (sans pagination)
+            const params = this.getFiltersParams();
+
+            const response = await fetch(`/api/customers/all?${params}&pageSize=10000`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+
+            if (!response.ok) throw new Error('Erreur lors du chargement');
+
+            const data = await response.json();
+            const customers = data.customers;
+
+            if (customers.length === 0) {
+                showNotification('Aucune donnée à exporter', 'error');
+                return;
+            }
+
+            // Transformer les données pour Excel
+            const rows = customers.map(customer => {
+                const date = customer.date ? new Date(customer.date + 'T00:00:00').toLocaleDateString('fr-FR') : '-';
+                return {
+                    'Date': date,
+                    'Téléphone': customer.telephone,
+                    'Nom Client': customer.nom_client,
+                    'Point de vente': customer.point_vente,
+                    'Montant (FCFA)': customer.montant_commande,
+                    'Type client': customer.type_client,
+                    'Comment connu?': customer.comment_connu || '',
+                    'Commentaire': customer.commentaire_client || '',
+                    'Note Qualité': customer.note_qualite_produits || '',
+                    'Note Prix': customer.note_niveau_prix || '',
+                    'Note Service': customer.note_service_commercial || '',
+                    'Note Globale': customer.note_globale ? parseFloat(customer.note_globale).toFixed(1) : ''
+                };
+            });
+
+            // Générer le classeur Excel
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(rows);
+            
+            // Ajuster la largeur des colonnes
+            const colWidths = [
+                { wch: 12 },  // Date
+                { wch: 15 },  // Téléphone
+                { wch: 25 },  // Nom Client
+                { wch: 20 },  // Point de vente
+                { wch: 15 },  // Montant
+                { wch: 12 },  // Type client
+                { wch: 20 },  // Comment connu
+                { wch: 40 },  // Commentaire
+                { wch: 12 },  // Note Qualité
+                { wch: 12 },  // Note Prix
+                { wch: 12 },  // Note Service
+                { wch: 12 }   // Note Globale
+            ];
+            ws['!cols'] = colWidths;
+            
+            XLSX.utils.book_append_sheet(wb, ws, 'Clients');
+
+            // Nom du fichier avec la date
+            const dateStr = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(wb, `base_clients_${dateStr}.xlsx`);
+            
+            showNotification(`Export réussi : ${customers.length} client(s) exporté(s)`, 'success');
+        } catch (error) {
+            console.error('Erreur export Excel:', error);
+            showNotification('Erreur lors de l\'export Excel: ' + error.message, 'error');
+        }
     }
 };
 
